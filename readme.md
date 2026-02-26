@@ -1,74 +1,71 @@
-# Comparative Performance Analysis of Workload on Enterprise GPUs with Consumer Platforms Accelerated by CUDA Graphs
+# Resumo (Abstract)
+Este trabalho investiga a viabilidade de reproduzir benchmarks originalmente executados em GPUs de datacenter (NVIDIA A100 e RTX 8000) utilizando placas de vídeo de consumo (NVIDIA GeForce RTX 3050 e GTX 1060) com suporte a CUDA Graphs.
 
-This repository contains the experimental data and methodology used in the paper **"Comparative Performance Analysis of Workload on Enterprise GPUs with Consumer Platforms Accelerated by CUDA Graphs"**.
+Algoritmos selecionados (BT, LU, SP, EP, IS, MG e CG) foram avaliados em diferentes classes de problemas. O estudo foca no tempo de execução como métrica principal, comparando execuções com e sem CUDA Graphs para quantificar ganhos de desempenho. Resultados mostram que, enquanto as GPUs empresariais superam em cargas de trabalho limitadas por memória, o hardware de consumo moderno permite a reprodução econômica de experimentos científicos moderados, apoiando a democratização da pesquisa em computação de alto desempenho (HPC).
 
-## 🔗 Source Code
+---
 
-The experiments in this study were conducted using the **NAS Parallel Benchmarks (NPB)** implementation with **CUDA Graphs** support.
+# Ambiente Experimental & Reprodutibilidade
+Estes passos detalham a configuração no **Ubuntu 24.04 LTS**, incluindo a resolução manual de dependências legadas exigidas pelo **CUDA 12.4**.
 
-**The source code used for these benchmarks is available at:**
-👉 **[https://github.com/odiakun/NPB-GPU-CUDA-Graphs](https://github.com/odiakun/NPB-GPU-CUDA-Graphs)**
+### 1. Preparação do Sistema & Dependências Legadas
+Instale o essencial de compilação e a `libtinfo5` (descontinuada no Ubuntu 24.04, mas necessária para o instalador CUDA):
 
-We gratefully acknowledge the work of Diakun et al. in providing the implementation that made this comparative analysis possible.
+```bash
+sudo apt update
+sudo apt install -y git build-essential gcc g++ wget
+wget [http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb](http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb)
+sudo apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb -y
+### 2. Instalação do CUDA Toolkit 12.4
+Utilizando o repositório do NVIDIA Ubuntu 22.04 para compatibilidade:
 
-## 📄 Abstract
+Bash
+wget [https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb)
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo bash -c 'echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] [https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/) /" > /etc/apt/sources.list.d/cuda-ubuntu2204-x86_64.list'
+sudo apt update
+sudo apt install -y cuda-toolkit-12-4 cuda-drivers
+sudo reboot
+### 3. Configuração de Caminhos (Path)
 
-This work investigates the feasibility of reproducing benchmarks originally run on datacenter GPUs (NVIDIA A100, RTX 8000) using consumer-grade graphics cards (RTX 3050, GTX 1060). We evaluated selected NPB algorithms (BT, LU, SP, EP, IS, MG, and CG) across different problem classes using CUDA Graphs to quantify performance gains and overheads.
+Bash
+sudo ln -sfn /usr/local/cuda-12.4 /usr/local/cuda
+echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+# Fluxo de Execução
 
-## 🛠️ Experimental Environment
+### Compilação & Otimização de Arquitetura
+Para obter o desempenho máximo, compile a suíte NPB especificamente para a Compute Capability (CC) da sua GPU:
 
-To reproduce the results presented in our paper, the following environment and hardware configurations were utilized:
+Identificar CC: nvidia-smi --query-gpu=compute_cap --format=csv
 
-### Hardware
-* **Consumer GPUs:**
-    * NVIDIA GeForce **RTX 3050** (Ampere Architecture)
-    * NVIDIA GeForce **GTX 1060** (Pascal Architecture, 3GB VRAM)
-* **Enterprise GPUs (Baseline):**
-    * NVIDIA **A100** (Ampere Architecture)
-    * NVIDIA **RTX 8000** (Turing Architecture)
+Editar config/make.def: Ajuste a flag COMPUTE_CAPABILITY.
 
-### Software Stack
-* **Operating System:** Linux Ubuntu 22.04 LTS
-* **CUDA Toolkit:** Version 13.0.2
-* **Compiler:** GCC / NVCC
+RTX 3050 (CC 8.6): -gencode arch=compute_86,code=sm_86
 
-## 🧪 Methodology & Protocol
+GTX 1060 (CC 6.1): -gencode arch=compute_61,code=sm_61
 
-To ensure statistical reliability and minimize the influence of OS jitter and cold-start overheads, we strictly adhered to the following experimental protocol for every Algorithm/Class combination:
+Exemplo: Compilar Block Tridiagonal (BT) Classe C
 
-1.  **Total Executions:** 13 consecutive runs were performed for each configuration.
-2.  **Warm-up Phase:** The first **3 executions** were discarded. This phase allows the GPU clock frequencies to stabilize (boost states) and instruction caches to be populated.
-3.  **Data Collection:** The remaining **10 executions** were recorded.
-4.  **Metric:** The final performance metric reported is the arithmetic mean of the 10 valid runs (Wall-clock time in seconds).
+Bash
+make bt CLASS=C
+### Protocolo Experimental
+Para confiabilidade estatística conforme descrito na Metodologia:
 
-### Benchmarks Evaluated
-* **BT, LU, SP:** Fluid dynamics and iterative solvers.
-* **EP:** Embarrassingly Parallel.
-* **IS:** Integer Sort (Memory bound).
-* **MG, CG:** Multi-Grid and Conjugate Gradient.
+Total de Execuções: 13 execuções consecutivas por configuração.
 
-## 📊 Summary of Results
+Warm-up: Descarte as 3 primeiras execuções.
 
-The table below highlights the performance gap (execution time in seconds) for **Class C** benchmarks between consumer and enterprise hardware.
+Dados: Média das 10 execuções válidas restantes.
 
-| Benchmark | GTX 1060 | RTX 3050 | A100 |
-| :--- | :--- | :--- | :--- |
-| **BT.C** | *Failed (VRAM)* | 58.59s | 7.60s |
-| **SP.C** | 31.11s | 28.79s | 2.51s |
-| **LU.C** | 52.05s | 43.46s | 3.34s |
-| **IS.C** | *N/A* | 1.44s | 0.03s |
+Bash
+cd bin
+./bt.C
+# Visão Geral dos Resultados
 
-*Note: The GTX 1060 failed to execute BT.C and MG.C due to VRAM limitations (3GB).*
+Desempenho Estável: A RTX 3050 entrega comportamento consistente, tipicamente 6x–12x mais lenta que a A100, mas significativamente mais rápida que a GTX 1060.
 
-## 📝 Citation
+Limites de Memória: A GTX 1060 (3GB VRAM) enfrenta limitações severas em benchmarks de Classe C devido aos requisitos de alocação de grafos.
 
-If you reference this study or data, please cite our paper:
-
-```bibtex
-@inproceedings{retzlaff2025comparative,
-  author    = {Retzlaff, Leandro L. and Pereira, Calebe C. and Veltri, Helena P. and Faganello, Murilo and Klein, William T. and Roque, Alexandre S.},
-  title     = {Comparative Performance Analysis of Workload on Enterprise GPUs with Consumer Platforms Accelerated by CUDA Graphs},
-  booktitle = {Proceedings of the [Conference Name]},
-  year      = {2025},
-  institution = {Universidade Regional Integrada do Alto Uruguai e das Missões (URI)}
-}
+Gargalo de Banda: Aplicações com intenso throughput de memória (benchmark IS) permanecem altamente dependentes da memória HBM2 das GPUs enterprise.
